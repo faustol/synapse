@@ -26,8 +26,10 @@ Finalmente, cada participante deberá elaborar un archivo Markdown en Github con
 
 El documento Markdown deberá contener el proceso técnico que el participante ha seguido con un orden lógico y el link del proyecto Githab deberá ser registrado como entregable de esta tarea.
 #### **RESULTADO**
+**PASO 1:** Ingestrar datos de mysql
 ![](https://raw.githubusercontent.com/faustol/synapse/main/mysql.png)
-**PASO 1:** Obtener las tablas de mysql
+
+**PASO 1.1:** Obtener las tablas de mysql
 ```json
         "activities": [
             {
@@ -58,7 +60,7 @@ El documento Markdown deberá contener el proceso técnico que el participante h
                 }
             }]
 ```
-**PASO 2:** Copiamos las tablas al storage account
+**PASO 1.2:** Copiamos las tablas al storage account
 ```json
  {
                 "name": "dataExtract",
