@@ -1,4 +1,4 @@
-#**TRABAJO FINAL SYNAPSE**
+# **TRABAJO FINAL SYNAPSE**
 
 ------------
 **Autor:** Fausto Loja Mora
@@ -259,4 +259,100 @@ Con este proceso hemos completado la extracción de datos de mysql y almacenado 
 
 En este paso 2 hubiera podido usar spark pero para aprovechar las bondades de Synapse Data factory lo he realizado con HTTP.
 
+**PASO 3:** Tranformación de datos mediante pyspark para llegar al resultado esperado
+**PASO 3.1:** Lectura de los datos
+```python
+%%pyspark
+##Ruta genérica
+path='abfss://capacitacion@sesacapacitacion.dfs.core.windows.net/synapse/workspaces/synapsecapacitacion/warehouse/raw/floja/'
+##Rutas
+vPathCliente = path+'cliente.parquet'
+vPathFactura = path+'factura.parquet'
+vPathFacProducto = path+'facturaproducto.parquet'
+vPathMail = path+'mails.parquet'
+vPathProducto = path+'producto.parquet'
 
+dfCliente = spark.read.load(vPathCliente, format='parquet')
+dfFactura = spark.read.load(vPathFactura, format='parquet')
+dfFacturaProducto = spark.read.load(vPathFacProducto, format='parquet')
+dfProducto = spark.read.load(vPathProducto, format='parquet')
+dfMail = spark.read.load(vPathMail, format='parquet')
+```
+**PASO 3.2:** Creación de tablas temporales
+
+```python
+##Crear las tablas temporales
+dfCliente.createOrReplaceTempView("tmp_cliente")
+dfFactura.createOrReplaceTempView("tmp_factura")
+dfFacturaProducto.createOrReplaceTempView("tmp_facturaproducto")
+dfProducto.createOrReplaceTempView("tmp_producto")
+dfMail.createOrReplaceTempView("tmp_mail")
+display(dfFacturaProducto)
+```
+
+**PASO 3.3:** Consultas para llegar al resultado
+
+```python
+##SQL Integración de tablas
+vSql = """
+SELECT c.rowidcliente,
+    m.email email,
+    p.producto,
+    max(fp.fecha) fch_compra, 
+    count(p.rowidproducto) cantidad,
+    sum(fp.valorventaproducto) mnt_venta
+FROM tmp_cliente c 
+    INNER JOIN tmp_mail m on m.rowidcliente = c.rowidcliente
+    INNER JOIN tmp_factura f on c.rowidcliente = f.rowidcliente
+    INNER JOIN tmp_facturaproducto fp on fp.rowidfactura = f.rowidfactura
+    INNER JOIN tmp_producto p on p.rowidproducto = fp.rowidproducto
+    
+GROUP BY c.rowidcliente,p.producto,m.email
+"""
+dfCompleto = spark.sql(vSql)
+dfCompleto.createOrReplaceTempView("tmp_completo")
+##SQL  máxima de producto por cliente
+vSql = """
+SELECT c.rowidcliente, 
+    max(c.mnt_venta) maximo_valor,
+    max(c.cantidad) maximo_producto
+FROM tmp_completo c
+GROUP BY c.rowidcliente
+"""
+
+dfProCliente = spark.sql(vSql)
+dfProCliente.createOrReplaceTempView("tmp_maximos")
+
+##SQL Unificación
+vSql = """
+SELECT c.rowidcliente,
+    c.producto,
+    c.email,
+    c.fch_compra, 
+    c.cantidad ,
+    c.mnt_venta
+FROM tmp_completo c 
+INNER JOIN tmp_maximos m on c.rowidcliente = m.rowidcliente 
+            and m.maximo_producto = c.cantidad 
+            and c.mnt_venta = m.maximo_valor
+"""
+```
+**PASO 3.4:** Almacenamiento del resultado
+
+```python
+##GRABAR RESULTADO FINAL
+dfResultadoFinal = spark.sql(vSql)
+dfResultadoFinal.write.mode("overwrite").saveAsTable("default.tbl_floja")
+
+vPathFinal = path+'tbl_floja.parquet'
+dfResultadoFinal.repartition(1).write.mode("overwrite").parquet(vPathFinal)
+```
+
+#### **PIPELINE FINAL**
+El pipe final integrado con los tres pasos
+
+![](https://raw.githubusercontent.com/faustol/synapse/main/PIPELINE%20FINAL.png)
+
+El archivo final se almacena en el storage account
+
+![](https://raw.githubusercontent.com/faustol/synapse/main/resultado.png)
