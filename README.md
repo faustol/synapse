@@ -146,3 +146,117 @@ El documento Markdown deberá contener el proceso técnico que el participante h
 ```
 Con este proceso hemos completado la extracción de datos de mysql y almacenado el resultado en el storage account.
 ![](https://raw.githubusercontent.com/faustol/synapse/main/storage%20inicial.png)
+
+
+**PASO 2:** Obtenermos los correos desde el archivo, el mismo que lo he almacenado en una URL y creamos una actividad de copia
+**PASO 2.1:** Lectura del archivo, hay varias formas de hacerlo pero he utilizado un servicio vinculado http de Synapse como origen
+
+![](https://raw.githubusercontent.com/faustol/synapse/main/vinculado.png)
+
+```json
+{
+    "name": "floja_sd_mails",
+    "properties": {
+        "linkedServiceName": {
+            "referenceName": "flojaGitHub",
+            "type": "LinkedServiceReference"
+        },
+        "annotations": [],
+        "type": "DelimitedText",
+        "typeProperties": {
+            "location": {
+                "type": "HttpServerLocation"
+            },
+            "columnDelimiter": ",",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "quoteChar": "\""
+        },
+        "schema": []
+    },
+    "type": "Microsoft.Synapse/workspaces/datasets"
+}
+```
+
+**PASO 2.1:** Escritura del archivo en el destino storage account
+
+
+![](https://raw.githubusercontent.com/faustol/synapse/main/destino.png)
+
+```json
+{
+    "name": "floja_pipeline_file",
+    "properties": {
+        "activities": [
+            {
+                "name": "getFile",
+                "type": "Copy",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "7.00:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "HttpReadSettings",
+                            "requestMethod": "GET"
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "ParquetSink",
+                        "storeSettings": {
+                            "type": "AzureBlobFSWriteSettings"
+                        },
+                        "formatSettings": {
+                            "type": "ParquetWriteSettings"
+                        }
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": true,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "floja_sd_mails",
+                        "type": "DatasetReference"
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "floja_sd_dl",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "vTabla": "mails"
+                        }
+                    }
+                ]
+            }
+        ],
+        "folder": {
+            "name": "floja"
+        },
+        "annotations": [],
+        "lastPublishTime": "2022-06-23T00:41:46Z"
+    },
+    "type": "Microsoft.Synapse/workspaces/pipelines"
+}
+```
+
+En este paso 2 hubiera podido usar spark pero para aprovechar las bondades de Synapse Data factory lo he realizado con HTTP.
+
+
